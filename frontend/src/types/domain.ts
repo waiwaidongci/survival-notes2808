@@ -5,6 +5,8 @@ export interface CurvePoint{time:number;at_risk:number;events:number;censored:nu
 export interface GroupResult{cohort:Cohort;n:number;events:number;censored:number;curve:CurvePoint[];risk_table:{time:number;at_risk:number}[];median:number|null;median_status:string;last_observed:number;confidence:number;interval_method:string}
 export interface Logrank{estimable:boolean;chi_square:number|null;p_value:number|null;observed_a:number;expected_a:number;variance:number;reason:string;event_table:{time:number;risk_a:number;risk_b:number;events_a:number;events_b:number;expected_a:number;variance:number}[]}
 export interface Result{groups:GroupResult[];logrank:Logrank;confidence:number;time_unit:string;input_hash:string;interpretation:string;assumptions:string}
-export interface Run{id:number;name:string;cohort_a_id:number;cohort_b_id:number;confidence:number;status:string;result:Result;error:string;owner:string;created_at:string}
+export interface SnapshotGroupView{cohort:{id:number;code:string;name:string;process:string};specimens:number;events:number;censored:number}
+export interface RunSnapshotView{run_id:number;input_hash:string;artifact_path:string;artifact_verified:boolean|null;snapshot:{method_version:string;confidence:number;time_unit:string;risk_times:number[];groups:SnapshotGroupView[]}}
+export interface Run{id:number;name:string;cohort_a_id:number;cohort_b_id:number;confidence:number;status:string;result:Result;error:string;owner:string;created_at:string;input_snapshot:Record<string,unknown>;input_hash:string;artifact_path:string;artifact_hash:string;running_at:string;artifact_verified?:boolean|null}
 export interface Note{id:number;run_id:number;title:string;interpretation:string;recommendation:string;status:string;owner:string;reviewer:string;review_note:string;created_at:string;reviewed_at:string}
 export interface Audit{id:number;actor:string;action:string;target:string;created_at:string}

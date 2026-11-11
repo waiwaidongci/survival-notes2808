@@ -19,6 +19,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-local-survival-notes-change-this-key}
       SEED_DEMO: ${SEED_DEMO:-true}
+      ARTIFACT_DIR: /artifacts
     ports: ["${BACKEND_PORT:-19213}:8000"]
     volumes: ["artifacts:/artifacts"]
     depends_on:

@@ -57,7 +57,8 @@ seed按用户邮箱、批次code、试件code、随访specimen_id和基准研究
 - **双侧log-rank**：汇总两组所有事件时点，`E_A=d*n_A/n`，`V=d*(n_A/n)*(n_B/n)*(n-d)/(n-1)`（n≤1则V=0），`χ²=(ΣO_A-ΣE_A)²/ΣV`，自由度1，p=`erfc(sqrt(χ²/2))`。并列事件的有限总体校正保留。无事件或ΣV≈0时`estimable=false`、χ²/p=null，不给伪显著性。
 - 前提为独立试件、非信息性右删失；没有延迟入组、左/区间删失、重复事件、竞争风险或协变量调整。log-rank在比例风险差异下较敏感，交叉曲线可能检出力低；结果只作关联解释。
 - 失败态：每组少于2件、时长≤0/非有限/>1e6小时、事件非布尔、重复试件、相同批次、置信水平越界明确拒绝。全删失是合法研究：平坦曲线、中位未达到、log-rank不可估；不是失败或无限寿命证明。
-- 输入SHA256按试件code稳定排序，覆盖两组批次标识/工艺、所有试件字段、随访时长/状态/备注、置信水平、小时单位、在险时点与方法版本。保存结果含完整曲线、区间与事件风险集表，运行的参数保留在数据库。
+- 输入SHA256按试件code稳定排序，覆盖两组批次标识/工艺、所有试件字段、随访时长/状态/备注、置信水平、小时单位、在险时点与方法版本。研究入队时即将两批试件、终态随访（含当时备注）与分析口径整体冻结为输入快照（`survival_runs.input_snapshot`），worker只依据快照计算；之后补写随访备注只改变活数据表与之后新建的研究，不影响已固化研究。保存结果含完整曲线、区间与事件风险集表，运行的参数保留在数据库。
+- 幂等与恢复：同输入SHA256的重复投递复用同一条研究记录（Redis锁+唯一索引双保险），队列先LREM再RPUSH，重复消息不会重复生成结果；失败研究同输入重投会在原记录上重置重跑。worker启动及每约60秒扫描，将中断超过10分钟仍为running的研究自动重新入队。归档JSON（快照+结果+双SHA256）以临时文件原子替换写入，缺失或被篡改时按数据库结果对账重建；`/runs/{id}/snapshot`可还原排队依据，`/runs/{id}/archive`下载完整归档，两者与CSV导出一样要求研究已获批。快照功能上线前的旧研究在启动时回填快照、补齐归档，已获批旧档案照常查看与导出。
 
 官方参考：[SciPy ECDF与右删失KM](https://docs.scipy.org/doc/scipy-1.15.1/reference/generated/scipy.stats.ecdf.html)、[Greenwood区间](https://docs.scipy.org/doc/scipy-1.15.1/reference/generated/scipy.stats._result_classes.EmpiricalDistributionFunction.confidence_interval.html)、[log-rank口径](https://docs.scipy.org/doc/scipy-1.15.1/reference/generated/scipy.stats.logrank.html)。计算实现在本项目标准库算法中；SciPy1.15.1另作独立测试oracle，未用测试数值硬编码结果。
 
@@ -92,6 +93,7 @@ RunSummary/SurvivalPlot跨首页、结果和建议页复用，CohortSelector在�
 | DB_PORT | 17713 | MySQL宿主映射 |
 | JWT_SECRET | local-survival-notes-change-this-key | 本地演示密钥，部署前更换 |
 | SEED_DEMO | true | 启动seed |
+| ARTIFACT_DIR | /artifacts | 研究归档JSON与worker心跳目录（backend/worker共享卷） |
 
 Python3.11安装backend/requirements.txt，设置DATABASE_URL/REDIS_URL；`cd backend && uvicorn src.main:app --reload`，另起`python -m src.worker`。前端`npm install && npm run dev`，本地为`/api`设置后端代理。正式演示以Compose为准。
 
@@ -103,7 +105,7 @@ docker compose down -v --remove-orphans
 
 ## 已知边界
 
-合成冻结数据，无仪器/文件上传；仅允许补随访备注，不编辑终态时长/状态。单worker无running自动恢复、事务outbox、多实例锁；中断任务需重提。登录限流仅进程内。未给中位置信区间、RMST、风险比或比例风险检验，不自动推荐更换时间。ORM metadata初建表不等于完整迁移链；字体依赖网络，离线回退。
+合成冻结数据，无仪器/文件上传；仅允许补随访备注，不编辑终态时长/状态（备注在研究入队时冻结，不影响已创建研究）。单worker通过running心跳与启动/周期扫描自动恢复中断任务，配合Redis AOF与状态校验保证不重复计算；多实例部署仍需外部分布式锁与事务outbox。登录限流仅进程内。未给中位置信区间、RMST、风险比或比例风险检验，不自动推荐更换时间。ORM metadata初建表不等于完整迁移链（见`migrations/002_run_snapshot.sql`）；字体依赖网络，离线回退。
 
 ## License
 
